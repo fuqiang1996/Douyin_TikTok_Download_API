@@ -35,7 +35,9 @@
 
 import asyncio  # 异步I/O
 import os  # 系统操作
+import secrets
 import time  # 时间操作
+from datetime import datetime
 from urllib.parse import urlencode, quote  # URL编码
 import yaml  # 配置文件
 
@@ -47,7 +49,7 @@ from crawlers.douyin.web.models import (
     BaseRequestModel, LiveRoomRanking, PostComments,
     PostCommentsReply, PostDetail,
     UserProfile, UserCollection, UserLike, UserLive,
-    UserLive2, UserMix, UserPost
+    UserLive2, UserMix, UserPost, SearchDetail, VideoSearchDetail
 )
 # 抖音应用的工具类
 from crawlers.douyin.web.utils import (AwemeIdFetcher,  # Aweme ID获取
@@ -67,6 +69,26 @@ with open(f"{path}/config.yaml", "r", encoding="utf-8") as f:
     config = yaml.safe_load(f)
 
 
+def generate_search_id(timestamp: datetime = None,
+                       bytes_length: int = 10) -> str:
+    """
+    生成格式为 [时间戳] + [随机十六进制字符串] 的唯一ID
+
+    :param prefix: 是否添加 "search_id=" 前缀 (默认 True)
+    :param timestamp: 自定义时间戳 (默认当前时间)
+    :param bytes_length: 随机字节长度 (默认10字节 → 20字符十六进制)
+    :return: 生成的完整 search_id 字符串
+    """
+    # 生成时间戳部分
+    time_part = (timestamp or datetime.now()).strftime("%Y%m%d%H%M%S")
+
+    # 生成安全随机十六进制字符串 (大写)
+    random_hex = secrets.token_hex(bytes_length).upper()
+
+    # 拼接完整ID
+    return f"{time_part}{random_hex}"
+
+
 class DouyinWebCrawler:
 
     # 从配置文件中获取抖音的请求头
@@ -84,6 +106,66 @@ class DouyinWebCrawler:
         return kwargs
 
     "-------------------------------------------------------handler接口列表-------------------------------------------------------"
+
+    async def general_search_list(self):
+        """
+        综合搜索
+        https://www.douyin.com/aweme/v1/web/general/search/single/?device_platform=webapp&aid=6383&channel=channel_pc_web&search_channel=aweme_general&enable_history=1&keyword=%E5%B0%8F%E7%B1%B3%E8%BD%A6su7&search_source=normal_search&query_correct_type=1&is_filter_search=0&from_group_id=&offset=10&count=10&need_filter_settings=0&list_type=single&search_id=202502111948495D68E0CD50674415794D&update_version_code=170400&pc_client_type=1&pc_libra_divert=Mac&support_h265=1&support_dash=1&version_code=190600&version_name=19.6.0&cookie_enabled=true&screen_width=1440&screen_height=900&browser_language=zh-CN&browser_platform=MacIntel&browser_name=Chrome&browser_version=132.0.0.0&browser_online=true&engine_name=Blink&engine_version=132.0.0.0&os_name=Mac+OS&os_version=10.15.7&cpu_core_num=4&device_memory=8&platform=PC&downlink=10&effective_type=4g&round_trip_time=100&webid=7237758793530115641&uifid=96cd3b166f3029d7c1cc3f64582454ab8a83ff1f9e6d6689076dd47ef1dca5f8f24c287fb2ea1d9d27993aac655eb27d2723c4323bd27515c40f1c0b67074eca8b01257709230f018fe4d531ff3460a3164c4384e7b0af7823aec03f42387ebd7e2a8b1125aa6525f974a8cc65b2f4e53b856ff9c2ce6ddaf732fae19d27c2231d6cfa90688ddee2d5a51c85c94dab9d89b3ed6e5c39911dc99a6ce80a11752c&msToken=gpZpdneVfbkXE--M6N4YShyCKeEYUhsqzbOLpZxsmb6nhVgyEVqy_hliKN5BzGgkdsWPjMnz9W31YPdCbfdHvOBVaZ1jfvjHKwKeCcs4wdkv0iR6TF2GuX668KLCQeRob8ppkkmZuU8QOrstb2wmdWU__o1tuSPP2fxgaNQivOKr&a_bogus=YXs5hqW7mqRbCV%2FtYCdyS5rlSu6ArTSy%2FHT%2FWyOP7OYvGhtY2RP2DPcecxqpotqnpbpkkeQ7SD-lGnnbO0XiZH9kFmZvSg4RwTVCnh6LhqiXbzJsDqRoe8YzzwMFW5sL-%2FCGiAm5As0x1DclIrVzAdeGC5ToBmbpWqZjd2TytEAhDW8kwn3kOCD2OgTqbf%3D%3D
+        Args:
+            keywords:
+
+        Returns:
+
+        """
+        kwargs = await self.get_douyin_headers()
+        base_crawler = BaseCrawler(proxies=kwargs["proxies"], crawler_headers=kwargs["headers"])
+        async with base_crawler as crawler:
+            # 创建一个作品详情的BaseModel参数
+            params = SearchDetail(keyword="红米k70至尊版", offset=0, count=10, search_id=generate_search_id())
+            # 生成一个作品详情的带有加密参数的Endpoint
+            # 2024年6月12日22:41:44 由于XBogus加密已经失效，所以不再使用XBogus加密参数，转移至a_bogus加密参数。
+            # endpoint = BogusManager.xb_model_2_endpoint(
+            #     DouyinAPIEndpoints.POST_DETAIL, params.dict(), kwargs["headers"]["User-Agent"]
+            # )
+
+            # 生成一个作品详情的带有a_bogus加密参数的Endpoint
+            params_dict = params.dict()
+            params_dict["msToken"] = ''
+            a_bogus = BogusManager.ab_model_2_endpoint(params_dict, kwargs["headers"]["User-Agent"])
+            endpoint = f"{DouyinAPIEndpoints.GENERAL_SEARCH}?{urlencode(params_dict)}&a_bogus={a_bogus}"
+
+            response = await crawler.fetch_get_json(endpoint)
+        return response
+
+    async def video_search_list(self):
+        """
+        视频搜索
+        Args:
+            keywords:
+
+        Returns:
+
+        """
+        kwargs = await self.get_douyin_headers()
+        base_crawler = BaseCrawler(proxies=kwargs["proxies"], crawler_headers=kwargs["headers"])
+        async with base_crawler as crawler:
+            # 创建一个作品详情的BaseModel参数
+            params = VideoSearchDetail(keyword="红米k70至尊版", offset=0, count=10, search_id=generate_search_id())
+            # 生成一个作品详情的带有加密参数的Endpoint
+            # 2024年6月12日22:41:44 由于XBogus加密已经失效，所以不再使用XBogus加密参数，转移至a_bogus加密参数。
+            # endpoint = BogusManager.xb_model_2_endpoint(
+            #     DouyinAPIEndpoints.POST_DETAIL, params.dict(), kwargs["headers"]["User-Agent"]
+            # )
+
+            # 生成一个作品详情的带有a_bogus加密参数的Endpoint
+            params_dict = params.dict()
+            params_dict["msToken"] = ''
+            a_bogus = BogusManager.ab_model_2_endpoint(params_dict, kwargs["headers"]["User-Agent"])
+            endpoint = f"{DouyinAPIEndpoints.VIDEO_SEARCH}?{urlencode(params_dict)}&a_bogus={a_bogus}"
+
+            response = await crawler.fetch_get_json(endpoint)
+        return response
+
 
     # 获取单个作品数据
     async def fetch_one_video(self, aweme_id: str):
@@ -352,9 +434,10 @@ class DouyinWebCrawler:
         """-------------------------------------------------------handler接口列表-------------------------------------------------------"""
 
         # 获取单一视频信息
-        # aweme_id = "7372484719365098803"
-        # result = await self.fetch_one_video(aweme_id)
-        # print(result)
+        aweme_id = "7403688488853343500"
+        result = await self.fetch_one_video(aweme_id)
+        # result = await self.video_search_list()
+        print(result)
 
         # 获取用户发布作品数据
         # sec_user_id = "MS4wLjABAAAANXSltcLCzDGmdNFI2Q_QixVTr67NiYzjKOIP5s03CAE"

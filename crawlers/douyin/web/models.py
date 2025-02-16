@@ -177,6 +177,50 @@ class PostDetail(BaseRequestModel):
     aweme_id: str
 
 
+class SearchDetail(BaseRequestModel):
+    """
+    综合搜索
+    """
+    keyword: str
+    count: int = 10
+    offset: int = 10
+    from_group_id: str = ""
+    search_id: str = "202502111948495D68E0CD50674415794D"
+    search_channel: str = "aweme_general"
+    enable_history: int = 1
+    search_source: str = "normal_search"
+    query_correct_type: int = 1
+    is_filter_search: int = 0
+    need_filter_settings: int = 0
+    list_type: str = "single"
+    update_version_code: str = 190500
+    support_h265: int = 1
+    support_dash: int = 1
+    cookie_enabled: bool = True
+
+
+class VideoSearchDetail(BaseRequestModel):
+    """
+    视频搜索
+    """
+    keyword: str
+    count: int = 50
+    offset: int = 0
+    from_group_id: str = ""
+    search_id: str = "202502111948495D68E0CD50674415794D"
+    search_channel: str = "aweme_video_web"
+    enable_history: int = 1
+    search_source: str = "switch_tab"
+    query_correct_type: int = 1
+    is_filter_search: int = 0
+    need_filter_settings: int = 0
+    list_type: str = "single"
+    update_version_code: str = 190500
+    support_h265: int = 1
+    support_dash: int = 1
+    cookie_enabled: bool = True
+
+
 class PostComments(BaseRequestModel):
     aweme_id: str
     cursor: int = 0
